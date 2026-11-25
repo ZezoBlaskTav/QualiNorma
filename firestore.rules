@@ -1,0 +1,503 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Primitives & Role Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerified() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerified() && request.auth.token.email == 'joseluisblaskowskitavares@gmail.com';
+    }
+
+    function userProfilePath(uid) {
+      return /databases/$(database)/documents/users_public/$(uid);
+    }
+
+    function hasUserProfile() {
+      return isVerified() && exists(userProfilePath(request.auth.uid));
+    }
+
+    function getUserRole() {
+      return get(userProfilePath(request.auth.uid)).data.role;
+    }
+
+    function isUserActive() {
+      return !hasUserProfile() || get(userProfilePath(request.auth.uid)).data.active == true;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (hasUserProfile() && get(userProfilePath(request.auth.uid)).data.active == true && getUserRole() == 'admin')
+      );
+    }
+
+    function isApproverOrAdmin() {
+      return isAdmin() || (hasUserProfile() && isUserActive() && getUserRole() == 'aprovador');
+    }
+
+    function isEditorOrAbove() {
+      return isApproverOrAdmin() || (hasUserProfile() && isUserActive() && getUserRole() == 'editor');
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidAdminGrant(data) {
+      return data.keys().hasAll(['uid', 'grantedBy', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'grantedBy', 'createdAt']) &&
+        isValidId(data.uid) &&
+        isValidId(data.grantedBy) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidUserPublic(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'department', 'jobTitle', 'active', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'role', 'department', 'jobTitle', 'active', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 100 &&
+        data.role in ['admin', 'aprovador', 'editor', 'leitor'] &&
+        data.department is string && data.department.size() >= 2 && data.department.size() <= 80 &&
+        data.jobTitle is string && data.jobTitle.size() >= 2 && data.jobTitle.size() <= 80 &&
+        data.active is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivate(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidStepList(steps) {
+      return steps is list && steps.size() <= 25 && (
+        steps.size() == 0 || (
+          steps[0] is map &&
+          steps[0].keys().hasAll(['order', 'title', 'description', 'criticalControl']) &&
+          steps[0].keys().hasOnly(['order', 'title', 'description', 'criticalControl']) &&
+          steps[0].order is int &&
+          steps[0].title is string && steps[0].title.size() >= 1 && steps[0].title.size() <= 160 &&
+          steps[0].description is string && steps[0].description.size() <= 1000 &&
+          steps[0].criticalControl is bool
+        )
+      );
+    }
+
+    function isValidPop(data) {
+      return data.keys().hasAll([
+          'code', 'title', 'department', 'category', 'currentVersion', 'status',
+          'objective', 'scope', 'responsibilities', 'steps', 'changeSummary',
+          'ownerId', 'ownerName', 'approverId', 'approverName',
+          'effectiveDate', 'nextReviewDate', 'lastRejectionReason',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'code', 'title', 'department', 'category', 'currentVersion', 'status',
+          'objective', 'scope', 'responsibilities', 'steps', 'changeSummary',
+          'ownerId', 'ownerName', 'approverId', 'approverName',
+          'effectiveDate', 'nextReviewDate', 'lastRejectionReason',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.code is string && data.code.size() >= 5 && data.code.size() <= 32 && data.code.matches('^POP-[A-Z0-9\\-]{2,26}$') &&
+        data.title is string && data.title.size() >= 3 && data.title.size() <= 160 &&
+        data.department is string && data.department.size() >= 2 && data.department.size() <= 80 &&
+        data.category is string && data.category.size() >= 2 && data.category.size() <= 80 &&
+        data.currentVersion is int && data.currentVersion >= 1 && data.currentVersion <= 999 &&
+        data.status in ['rascunho', 'em_revisao', 'aguardando_aprovacao', 'vigente', 'obsoleto'] &&
+        data.objective is string && data.objective.size() >= 5 && data.objective.size() <= 2000 &&
+        data.scope is string && data.scope.size() >= 3 && data.scope.size() <= 1500 &&
+        data.responsibilities is string && data.responsibilities.size() <= 1500 &&
+        isValidStepList(data.steps) &&
+        data.changeSummary is string && data.changeSummary.size() <= 500 &&
+        isValidId(data.ownerId) &&
+        data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 100 &&
+        data.approverId is string && data.approverId.size() <= 128 &&
+        data.approverName is string && data.approverName.size() <= 100 &&
+        data.effectiveDate is string && data.effectiveDate.size() <= 32 &&
+        data.nextReviewDate is string && data.nextReviewDate.size() <= 32 &&
+        data.lastRejectionReason is string && data.lastRejectionReason.size() <= 600 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPopVersion(data) {
+      return data.keys().hasAll([
+          'popId', 'versionNumber', 'code', 'title', 'department', 'category',
+          'objective', 'scope', 'responsibilities', 'steps', 'changeSummary',
+          'authorId', 'authorName', 'approvedById', 'approvedByName',
+          'effectiveDate', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'popId', 'versionNumber', 'code', 'title', 'department', 'category',
+          'objective', 'scope', 'responsibilities', 'steps', 'changeSummary',
+          'authorId', 'authorName', 'approvedById', 'approvedByName',
+          'effectiveDate', 'createdAt'
+        ]) &&
+        isValidId(data.popId) &&
+        data.versionNumber is int && data.versionNumber >= 1 && data.versionNumber <= 999 &&
+        data.code is string && data.code.size() >= 5 && data.code.size() <= 32 &&
+        data.title is string && data.title.size() >= 3 && data.title.size() <= 160 &&
+        data.department is string && data.department.size() >= 2 && data.department.size() <= 80 &&
+        data.category is string && data.category.size() >= 2 && data.category.size() <= 80 &&
+        data.objective is string && data.objective.size() >= 5 && data.objective.size() <= 2000 &&
+        data.scope is string && data.scope.size() >= 3 && data.scope.size() <= 1500 &&
+        data.responsibilities is string && data.responsibilities.size() <= 1500 &&
+        isValidStepList(data.steps) &&
+        data.changeSummary is string && data.changeSummary.size() <= 500 &&
+        isValidId(data.authorId) &&
+        data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 100 &&
+        isValidId(data.approvedById) &&
+        data.approvedByName is string && data.approvedByName.size() >= 2 && data.approvedByName.size() <= 100 &&
+        data.effectiveDate is string && data.effectiveDate.size() <= 32 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPopApproval(data) {
+      return data.keys().hasAll([
+          'entityType', 'entityId', 'versionNumber', 'action', 'fromStatus',
+          'toStatus', 'comment', 'actorId', 'actorName', 'actorRole', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'entityType', 'entityId', 'versionNumber', 'action', 'fromStatus',
+          'toStatus', 'comment', 'actorId', 'actorName', 'actorRole', 'createdAt'
+        ]) &&
+        data.entityType == 'pop' &&
+        isValidId(data.entityId) &&
+        data.versionNumber is int && data.versionNumber >= 1 && data.versionNumber <= 999 &&
+        data.action in ['criado', 'submetido', 'revisado', 'aprovado', 'reprovado', 'nova_revisao', 'arquivado'] &&
+        data.fromStatus is string && data.fromStatus.size() <= 40 &&
+        data.toStatus is string && data.toStatus.size() <= 40 &&
+        data.comment is string && data.comment.size() <= 600 &&
+        isValidId(data.actorId) &&
+        data.actorName is string && data.actorName.size() >= 2 && data.actorName.size() <= 100 &&
+        data.actorRole is string && data.actorRole.size() >= 2 && data.actorRole.size() <= 40 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPac(data) {
+      return data.keys().hasAll([
+          'code', 'title', 'origin', 'severity', 'department',
+          'relatedPopId', 'relatedPopCode', 'rootCause', 'actionPlan',
+          'responsibleId', 'responsibleName', 'dueDate', 'status',
+          'verificationNotes', 'progressPercent', 'ownerId', 'ownerName',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'code', 'title', 'origin', 'severity', 'department',
+          'relatedPopId', 'relatedPopCode', 'rootCause', 'actionPlan',
+          'responsibleId', 'responsibleName', 'dueDate', 'status',
+          'verificationNotes', 'progressPercent', 'ownerId', 'ownerName',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.code is string && data.code.size() >= 5 && data.code.size() <= 32 && data.code.matches('^PAC-[A-Z0-9\\-]{2,26}$') &&
+        data.title is string && data.title.size() >= 3 && data.title.size() <= 160 &&
+        data.origin in ['nao_conformidade', 'auditoria_interna', 'implantacao_pop', 'melhoria_continua', 'inspecao_sanitaria'] &&
+        data.severity in ['baixa', 'media', 'alta', 'critica'] &&
+        data.department is string && data.department.size() >= 2 && data.department.size() <= 80 &&
+        data.relatedPopId is string && data.relatedPopId.size() <= 128 &&
+        data.relatedPopCode is string && data.relatedPopCode.size() <= 32 &&
+        data.rootCause is string && data.rootCause.size() >= 3 && data.rootCause.size() <= 2000 &&
+        data.actionPlan is string && data.actionPlan.size() >= 5 && data.actionPlan.size() <= 2000 &&
+        isValidId(data.responsibleId) &&
+        data.responsibleName is string && data.responsibleName.size() >= 2 && data.responsibleName.size() <= 100 &&
+        data.dueDate is string && data.dueDate.size() >= 4 && data.dueDate.size() <= 32 &&
+        data.status in ['aberto', 'em_execucao', 'aguardando_verificacao', 'concluido', 'cancelado'] &&
+        data.verificationNotes is string && data.verificationNotes.size() <= 1000 &&
+        data.progressPercent is int && data.progressPercent >= 0 && data.progressPercent <= 100 &&
+        isValidId(data.ownerId) &&
+        data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPacTask(data) {
+      return data.keys().hasAll([
+          'pacId', 'order', 'title', 'assigneeName', 'completed',
+          'evidenceNote', 'completedById', 'completedByName',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'pacId', 'order', 'title', 'assigneeName', 'completed',
+          'evidenceNote', 'completedById', 'completedByName',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.pacId) &&
+        data.order is int && data.order >= 1 && data.order <= 100 &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 160 &&
+        data.assigneeName is string && data.assigneeName.size() <= 100 &&
+        data.completed is bool &&
+        data.evidenceNote is string && data.evidenceNote.size() <= 600 &&
+        data.completedById is string && data.completedById.size() <= 128 &&
+        data.completedByName is string && data.completedByName.size() <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPacApproval(data) {
+      return data.keys().hasAll([
+          'entityType', 'entityId', 'action', 'fromStatus',
+          'toStatus', 'comment', 'actorId', 'actorName', 'actorRole', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'entityType', 'entityId', 'action', 'fromStatus',
+          'toStatus', 'comment', 'actorId', 'actorName', 'actorRole', 'createdAt'
+        ]) &&
+        data.entityType == 'pac' &&
+        isValidId(data.entityId) &&
+        data.action in ['criado', 'iniciado', 'enviado_verificacao', 'aprovado', 'reprovado', 'cancelado'] &&
+        data.fromStatus is string && data.fromStatus.size() <= 40 &&
+        data.toStatus is string && data.toStatus.size() <= 40 &&
+        data.comment is string && data.comment.size() <= 600 &&
+        isValidId(data.actorId) &&
+        data.actorName is string && data.actorName.size() >= 2 && data.actorName.size() <= 100 &&
+        data.actorRole is string && data.actorRole.size() >= 2 && data.actorRole.size() <= 40 &&
+        data.createdAt is timestamp;
+    }
+
+    // 4. Collection Rules
+
+    // Admins
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isVerified() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(userId) && isAdmin() && isValidAdminGrant(incoming()) && incoming().uid == userId && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(userId) && isAdmin() && userId != request.auth.uid;
+    }
+
+    // Users Public (No PII)
+    match /users_public/{userId} {
+      allow get: if isValidId(userId) && isVerified();
+      allow list: if isVerified() && (resource.data.active == true || resource.data.uid == request.auth.uid);
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUserPublic(incoming()) &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        incoming().active == true &&
+        (isBootstrappedAdmin() ? incoming().role == 'admin' : incoming().role == 'leitor');
+      allow update: if isValidId(userId) && isVerified() && isValidUserPublic(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() || (
+            isOwner(userId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'jobTitle', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin() && userId != request.auth.uid;
+    }
+
+    // Users Private (PII Isolated)
+    match /users_private/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isVerified() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUserPrivate(incoming()) &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(userId) && (isOwner(userId) || isAdmin()) && isValidUserPrivate(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+      allow delete: if isValidId(userId) && isAdmin() && userId != request.auth.uid;
+    }
+
+    // POPs (Procedimentos Operacionais Padrão)
+    match /pops/{popId} {
+      allow get: if isValidId(popId) && isVerified() && (
+        resource.data.status == 'vigente' ||
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.approverId == request.auth.uid ||
+        isAdmin() ||
+        (resource.data.status in ['em_revisao', 'aguardando_aprovacao', 'obsoleto'] && isEditorOrAbove())
+      );
+      allow list: if isVerified() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.approverId == request.auth.uid ||
+        resource.data.status in ['vigente', 'em_revisao', 'aguardando_aprovacao', 'obsoleto']
+      );
+      allow create: if isValidId(popId) && isEditorOrAbove() && isValidPop(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().status == 'rascunho' &&
+        incoming().currentVersion == 1 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(popId) && isVerified() && isValidPop(incoming()) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (existing().status != 'obsoleto' && (
+            (isEditorOrAbove() && existing().status == 'rascunho' && incoming().status == 'rascunho' &&
+              incoming().currentVersion == existing().currentVersion &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'code', 'title', 'department', 'category', 'objective', 'scope',
+                'responsibilities', 'steps', 'changeSummary', 'approverId', 'approverName',
+                'nextReviewDate', 'updatedAt'
+              ])) ||
+            (isEditorOrAbove() && existing().status == 'rascunho' && incoming().status == 'em_revisao' &&
+              incoming().currentVersion == existing().currentVersion &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'changeSummary', 'lastRejectionReason', 'updatedAt'])) ||
+            (isEditorOrAbove() && existing().status == 'em_revisao' && incoming().status == 'aguardando_aprovacao' &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'approverId', 'approverName', 'updatedAt'])) ||
+            (isApproverOrAdmin() && existing().status in ['em_revisao', 'aguardando_aprovacao'] && incoming().status == 'vigente' &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'approverId', 'approverName', 'effectiveDate', 'nextReviewDate', 'lastRejectionReason', 'updatedAt'])) ||
+            (isApproverOrAdmin() && existing().status in ['em_revisao', 'aguardando_aprovacao'] && incoming().status == 'rascunho' &&
+              incoming().lastRejectionReason.size() >= 3 &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastRejectionReason', 'updatedAt'])) ||
+            (isEditorOrAbove() && existing().status == 'vigente' && incoming().status == 'rascunho' &&
+              incoming().currentVersion == existing().currentVersion + 1 &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentVersion', 'changeSummary', 'lastRejectionReason', 'updatedAt']))
+          ))
+        );
+      allow delete: if isValidId(popId) && isAdmin();
+
+      // Subcoleção: Versões imutáveis do POP
+      match /versions/{versionId} {
+        allow get: if isValidId(popId) && isValidId(versionId) && isVerified() &&
+          exists(/databases/$(database)/documents/pops/$(popId));
+        allow list: if isValidId(popId) && isVerified() && resource.data.popId == popId;
+        allow create: if isValidId(popId) && isValidId(versionId) && isApproverOrAdmin() &&
+          isValidPopVersion(incoming()) &&
+          incoming().popId == popId &&
+          incoming().approvedById == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          existsAfter(/databases/$(database)/documents/pops/$(popId));
+        allow update, delete: if false;
+      }
+
+      // Subcoleção: Histórico de aprovações do POP
+      match /approvals/{approvalId} {
+        allow get: if isValidId(popId) && isValidId(approvalId) && isVerified() &&
+          exists(/databases/$(database)/documents/pops/$(popId));
+        allow list: if isValidId(popId) && isVerified() && resource.data.entityId == popId && resource.data.entityType == 'pop';
+        allow create: if isValidId(popId) && isValidId(approvalId) && isEditorOrAbove() &&
+          isValidPopApproval(incoming()) &&
+          incoming().entityId == popId &&
+          incoming().actorId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          existsAfter(/databases/$(database)/documents/pops/$(popId));
+        allow update, delete: if false;
+      }
+    }
+
+    // PACs (Planos de Ação Corretiva)
+    match /pacs/{pacId} {
+      allow get: if isValidId(pacId) && isVerified() && (
+        resource.data.status != 'cancelado' ||
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.responsibleId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isVerified() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.responsibleId == request.auth.uid ||
+        resource.data.status in ['aberto', 'em_execucao', 'aguardando_verificacao', 'concluido']
+      );
+      allow create: if isValidId(pacId) && isEditorOrAbove() && isValidPac(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().status == 'aberto' &&
+        incoming().progressPercent == 0 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(pacId) && isVerified() && isValidPac(incoming()) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (existing().status != 'concluido' && existing().status != 'cancelado' && (
+            (isEditorOrAbove() && existing().status in ['aberto', 'em_execucao'] &&
+              incoming().status in ['aberto', 'em_execucao'] &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'title', 'origin', 'severity', 'department', 'relatedPopId', 'relatedPopCode',
+                'rootCause', 'actionPlan', 'responsibleId', 'responsibleName', 'dueDate',
+                'status', 'progressPercent', 'updatedAt'
+              ])) ||
+            ((request.auth.uid == existing().responsibleId || isEditorOrAbove()) &&
+              existing().status in ['aberto', 'em_execucao'] &&
+              incoming().status == 'em_execucao' &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'progressPercent', 'updatedAt'])) ||
+            ((request.auth.uid == existing().responsibleId || isEditorOrAbove()) &&
+              existing().status in ['aberto', 'em_execucao'] &&
+              incoming().status == 'aguardando_verificacao' &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'progressPercent', 'updatedAt'])) ||
+            (isApproverOrAdmin() && existing().status == 'aguardando_verificacao' &&
+              incoming().status in ['concluido', 'em_execucao'] &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'verificationNotes', 'progressPercent', 'updatedAt']))
+          ))
+        );
+      allow delete: if isValidId(pacId) && isAdmin();
+
+      // Subcoleção: Etapas de implantação do PAC
+      match /tasks/{taskId} {
+        allow get: if isValidId(pacId) && isValidId(taskId) && isVerified() &&
+          exists(/databases/$(database)/documents/pacs/$(pacId));
+        allow list: if isValidId(pacId) && isVerified() && resource.data.pacId == pacId;
+        allow create: if isValidId(pacId) && isValidId(taskId) && isEditorOrAbove() &&
+          isValidPacTask(incoming()) &&
+          incoming().pacId == pacId &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          existsAfter(/databases/$(database)/documents/pacs/$(pacId));
+        allow update: if isValidId(pacId) && isValidId(taskId) && isVerified() &&
+          isValidPacTask(incoming()) &&
+          incoming().pacId == existing().pacId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/pacs/$(pacId)) &&
+          get(/databases/$(database)/documents/pacs/$(pacId)).data.status in ['aberto', 'em_execucao'] && (
+            isAdmin() ||
+            isEditorOrAbove() ||
+            (get(/databases/$(database)/documents/pacs/$(pacId)).data.responsibleId == request.auth.uid &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'evidenceNote', 'completedById', 'completedByName', 'updatedAt']))
+          );
+        allow delete: if isValidId(pacId) && isValidId(taskId) && (isAdmin() || isEditorOrAbove());
+      }
+
+      // Subcoleção: Histórico de aprovações e verificação do PAC
+      match /approvals/{approvalId} {
+        allow get: if isValidId(pacId) && isValidId(approvalId) && isVerified() &&
+          exists(/databases/$(database)/documents/pacs/$(pacId));
+        allow list: if isValidId(pacId) && isVerified() && resource.data.entityId == pacId && resource.data.entityType == 'pac';
+        allow create: if isValidId(pacId) && isValidId(approvalId) && isVerified() && isUserActive() &&
+          isValidPacApproval(incoming()) &&
+          incoming().entityId == pacId &&
+          incoming().actorId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          existsAfter(/databases/$(database)/documents/pacs/$(pacId));
+        allow update, delete: if false;
+      }
+    }
+  }
+}

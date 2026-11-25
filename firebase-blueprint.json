@@ -1,0 +1,667 @@
+{
+  "entities": {
+    "AdminGrant": {
+      "title": "AdminGrant",
+      "description": "Concessão explícita de privilégio administrativo para um usuário.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID do usuário administrador."
+        },
+        "grantedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "UID de quem concedeu o acesso."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data de criação do registro."
+        }
+      },
+      "required": ["uid", "grantedBy", "createdAt"]
+    },
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Perfil público corporativo e nível de acesso (RBAC) do usuário.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "aprovador", "editor", "leitor"]
+        },
+        "department": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "jobTitle": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "role", "department", "jobTitle", "active", "createdAt", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Dados pessoais identificáveis (PII) isolados do usuário.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 5,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "PopDocument": {
+      "title": "PopDocument",
+      "description": "Procedimento Operacional Padrão (POP) com controle de fluxo e versão atual.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 32,
+          "pattern": "^POP-[A-Z0-9\\-]{2,26}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "department": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "category": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "currentVersion": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["rascunho", "em_revisao", "aguardando_aprovacao", "vigente", "obsoleto"]
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 2000
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 1500
+        },
+        "responsibilities": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "steps": {
+          "type": "array",
+          "description": "Lista ordenada de etapas operacionais (máximo 25)."
+        },
+        "changeSummary": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "approverId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "approverName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "effectiveDate": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "nextReviewDate": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "lastRejectionReason": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "code",
+        "title",
+        "department",
+        "category",
+        "currentVersion",
+        "status",
+        "objective",
+        "scope",
+        "responsibilities",
+        "steps",
+        "changeSummary",
+        "ownerId",
+        "ownerName",
+        "approverId",
+        "approverName",
+        "effectiveDate",
+        "nextReviewDate",
+        "lastRejectionReason",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PopVersion": {
+      "title": "PopVersion",
+      "description": "Snapshot imutável de uma versão aprovada e publicada de um POP.",
+      "type": "object",
+      "properties": {
+        "popId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "versionNumber": {
+          "type": "integer"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 32
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "department": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "category": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 2000
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 1500
+        },
+        "responsibilities": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "steps": {
+          "type": "array"
+        },
+        "changeSummary": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "authorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "approvedById": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "approvedByName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "effectiveDate": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "popId",
+        "versionNumber",
+        "code",
+        "title",
+        "department",
+        "category",
+        "objective",
+        "scope",
+        "responsibilities",
+        "steps",
+        "changeSummary",
+        "authorId",
+        "authorName",
+        "approvedById",
+        "approvedByName",
+        "effectiveDate",
+        "createdAt"
+      ]
+    },
+    "PopApprovalEvent": {
+      "title": "PopApprovalEvent",
+      "description": "Evento imutável do histórico de aprovação de um POP.",
+      "type": "object",
+      "properties": {
+        "entityType": {
+          "type": "string",
+          "enum": ["pop"]
+        },
+        "entityId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "versionNumber": {
+          "type": "integer"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["criado", "submetido", "revisado", "aprovado", "reprovado", "nova_revisao", "arquivado"]
+        },
+        "fromStatus": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "toStatus": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "actorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "actorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "actorRole": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "entityType",
+        "entityId",
+        "versionNumber",
+        "action",
+        "fromStatus",
+        "toStatus",
+        "comment",
+        "actorId",
+        "actorName",
+        "actorRole",
+        "createdAt"
+      ]
+    },
+    "PacDocument": {
+      "title": "PacDocument",
+      "description": "Plano de Ação Corretiva (PAC) e implantação vinculado ou não a um POP.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 32,
+          "pattern": "^PAC-[A-Z0-9\\-]{2,26}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "origin": {
+          "type": "string",
+          "enum": ["nao_conformidade", "auditoria_interna", "implantacao_pop", "melhoria_continua", "inspecao_sanitaria"]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["baixa", "media", "alta", "critica"]
+        },
+        "department": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "relatedPopId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "relatedPopCode": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "rootCause": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 2000
+        },
+        "actionPlan": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 2000
+        },
+        "responsibleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "responsibleName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "dueDate": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 32
+        },
+        "status": {
+          "type": "string",
+          "enum": ["aberto", "em_execucao", "aguardando_verificacao", "concluido", "cancelado"]
+        },
+        "verificationNotes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "progressPercent": {
+          "type": "integer"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "code",
+        "title",
+        "origin",
+        "severity",
+        "department",
+        "relatedPopId",
+        "relatedPopCode",
+        "rootCause",
+        "actionPlan",
+        "responsibleId",
+        "responsibleName",
+        "dueDate",
+        "status",
+        "verificationNotes",
+        "progressPercent",
+        "ownerId",
+        "ownerName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PacTask": {
+      "title": "PacTask",
+      "description": "Etapa operacional de implantação de um PAC.",
+      "type": "object",
+      "properties": {
+        "pacId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "order": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 160
+        },
+        "assigneeName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "completed": {
+          "type": "boolean"
+        },
+        "evidenceNote": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "completedById": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "completedByName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "pacId",
+        "order",
+        "title",
+        "assigneeName",
+        "completed",
+        "evidenceNote",
+        "completedById",
+        "completedByName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PacApprovalEvent": {
+      "title": "PacApprovalEvent",
+      "description": "Evento imutável de verificação e aprovação de um PAC.",
+      "type": "object",
+      "properties": {
+        "entityType": {
+          "type": "string",
+          "enum": ["pac"]
+        },
+        "entityId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["criado", "iniciado", "enviado_verificacao", "aprovado", "reprovado", "cancelado"]
+        },
+        "fromStatus": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "toStatus": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "actorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "actorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "actorRole": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "entityType",
+        "entityId",
+        "action",
+        "fromStatus",
+        "toStatus",
+        "comment",
+        "actorId",
+        "actorName",
+        "actorRole",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminGrant" },
+      "description": "Lista de administradores concedidos."
+    },
+    "/users_public/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Diretório público de usuários e papéis RBAC sem PII."
+    },
+    "/users_private/{userId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Dados pessoais (e-mail) isolados por usuário."
+    },
+    "/pops/{popId}": {
+      "schema": { "$ref": "#/entities/PopDocument" },
+      "description": "Documentos de Procedimentos Operacionais Padrão (POPs)."
+    },
+    "/pops/{popId}/versions/{versionId}": {
+      "schema": { "$ref": "#/entities/PopVersion" },
+      "description": "Histórico imutável de versões aprovadas de cada POP."
+    },
+    "/pops/{popId}/approvals/{approvalId}": {
+      "schema": { "$ref": "#/entities/PopApprovalEvent" },
+      "description": "Trilha de auditoria do fluxo de aprovação de cada POP."
+    },
+    "/pacs/{pacId}": {
+      "schema": { "$ref": "#/entities/PacDocument" },
+      "description": "Planos de Ação Corretiva (PACs) e implantação."
+    },
+    "/pacs/{pacId}/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/PacTask" },
+      "description": "Etapas operacionais de implantação de cada PAC."
+    },
+    "/pacs/{pacId}/approvals/{approvalId}": {
+      "schema": { "$ref": "#/entities/PacApprovalEvent" },
+      "description": "Trilha de verificação de eficácia e aprovação de cada PAC."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "QualiNorma — Controle de POPs e PACs",
+  "description": "Plataforma corporativa para controle de Procedimentos Operacionais Padrão (POPs), implantação de Planos de Ação Corretiva (PACs), fluxos de aprovação, níveis de acesso e histórico de versões.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body.printing-pop-report #root,
+  body.printing-pop-report .no-print {
+    display: none !important;
+  }
+
+  body.printing-pop-report .print-report-portal {
+    position: static !important;
+    inset: auto !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  body.printing-pop-report .print-report-dialog {
+    max-width: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    border: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  body.printing-pop-report .print-report-body {
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  body.printing-pop-report #pop-version-report-sheet {
+    border: none !important;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+}
+
